@@ -231,11 +231,35 @@ def full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],b
     interior_clifford_simp(g, matchf=matchf, quiet=quiet, stats=stats)
     pivot_gadget_simp(g, matchf=matchf, quiet=quiet, stats=stats)
     while True:
+        # fixed = 0
+        # bdry = g.inputs()
+        # for bb in bdry:
+        #     bphase = g.phase(bb)
+        #     g.set_phase(bb, 0)
+        #     v = g.add_vertex(VertexType.Z,g.qubits(bb),g.rows(bb),bphase)
+        #     g.add_edge((bb,v),EdgeType.SIMPLE)
+        #     fixed += (len(list(g.neighbors(bb))) - 1)
+        #     for nbr in g.neighbors(bb):
+        #         g.add_edge((v,nbr),g.edge_type(g.edge(bb,nbr)))
+        #         g.remove_edge(g.edge(bb,nbr))
+        # bdry = g.outputs()
+        # for bb in bdry:
+        #     bphase = g.phase(bb)
+        #     g.set_phase(bb, 0)
+        #     v = g.add_vertex(VertexType.Z,g.qubits(bb),g.rows(bb),bphase)
+        #     g.add_edge((bb,v),EdgeType.SIMPLE)
+        #     fixed += (len(list(g.neighbors(bb))) - 1)
+        #     for nbr in g.neighbors(bb):
+        #         g.add_edge((v,nbr),g.edge_type(g.edge(bb,nbr)))
+        #         g.remove_edge(g.edge(bb,nbr))
+        fixed = 0
+
         clifford_simp(g, matchf=matchf, quiet=quiet, stats=stats)
         i = gadget_simp(g, matchf=matchf, quiet=quiet, stats=stats)
         interior_clifford_simp(g, matchf=matchf, quiet=quiet, stats=stats)
         j = pivot_gadget_simp(g, matchf=matchf, quiet=quiet, stats=stats)
-        if i+j == 0:
+        # print(i,j,fixed)
+        if i+j+fixed == 0:
             break
 
 def teleport_reduce(g: BaseGraph[VT,ET], quiet:bool=True, stats:Optional[Stats]=None) -> BaseGraph[VT,ET]:

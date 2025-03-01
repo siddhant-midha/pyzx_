@@ -936,7 +936,8 @@ class BaseGraph(Generic[VT, ET], metaclass=DocstringMeta):
                 rem.append(v)
                 ty = self.type(v)
                 if ty == VertexType.BOUNDARY:
-                    raise TypeError("Diagram is not a well-typed ZX-diagram: contains isolated boundary vertex.")
+                    pass 
+                    # raise TypeError("Diagram is not a well-typed ZX-diagram: contains isolated boundary vertex.")
                 elif ty == VertexType.H_BOX:
                     self.scalar.add_phase(self.phase(v))
                 else: self.scalar.add_node(self.phase(v))

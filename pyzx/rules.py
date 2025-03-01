@@ -566,20 +566,20 @@ def match_pivot_boundary(
             continue
 
         good_vert = True
-        w = None
+        w = None ## the edge to be pivoted around will be (v,w) if things go as planned
         bound = None
         for n in g.neighbors(v):
             if types[n] != VertexType.Z:
-                good_vert = False
+                good_vert = False # don't proceed if non-Z spider
                 break
             if len(g.neighbors(n)) == 1: # v is a phase gadget
-                good_vert = False
+                good_vert = False # don't proceed v is actually a phase-gadget
                 break
             if n in consumed_vertices:
-                good_vert = False
+                good_vert = False  # don't proceed if neighbor already checked
                 break
             if g.is_ground(n) in consumed_vertices:
-                good_vert = False
+                good_vert = False # don't proceed if neighbor is grounded 
                 break
             boundaries: List[VT] = []
             wrong_match = False
@@ -588,32 +588,46 @@ def match_pivot_boundary(
                     boundaries.append(b)
                 elif types[b] != VertexType.Z:
                     wrong_match = True
-            if len(boundaries) != 1 or wrong_match: # n is not on the boundary,
-                continue             # has too many boundaries or has neighbors of wrong type
-            if phases[n] and hasattr(phases[n], 'denominator') and phases[n].denominator == 2:
-                w = n
-                bound = boundaries[0]
-            if not w:
-                w = n
-                bound = boundaries[0]
+            if wrong_match:# len(boundaries) != 1 or wrong_match: # n is not on the boundary, -> allowing multiple boundaries
+                continue     
+                   
+            # if phases[n] and hasattr(phases[n], 'denominator') and phases[n].denominator == 2:
+            #     w = n
+            #     bound = boundaries[0]
+            # if not w:
+            #     w = n
+            #     bound = boundaries[0]
+            w = n 
+
         if not good_vert or w is None: continue
-        if bound in inputs: mod = 0.5
-        else: mod = -0.5
-        v1 = g.add_vertex(VertexType.Z,-2,rs[w]+mod,phases[w])
-        v2 = g.add_vertex(VertexType.Z,-1,rs[w]+mod,0)
-        g.set_phase(w, 0)
-        g.update_phase_index(w,v1)
-        edge_list.append((w,v2))
-        edge_list.append((v1,v2))
+
+        ## -> don't see the point of the following commented out block
+
+        # if boundaries[0] in inputs: mod = 0.5
+        # else: mod = -0.5
+        # v1 = g.add_vertex(VertexType.Z,-2,rs[w]+mod,phases[w])
+        # v2 = g.add_vertex(VertexType.Z,-1,rs[w]+mod,0)
+        # g.set_phase(w, 0)
+        # g.update_phase_index(w,v1)
+        # edge_list.append((w,v2))
+        # edge_list.append((v1,v2))
+        for bb in ((boundaries)):
+            mod = 0.5 if bb in inputs else -0.5
+            vv = g.add_vertex(VertexType.Z,g.qubits()[bb],rs[bb]+mod,0)
+            g.add_edge(g.edge(vv, w), edgetype=EdgeType.HADAMARD)
+            etype = EdgeType.SIMPLE if g.edge_type(g.edge(w,bb)) == EdgeType.HADAMARD else EdgeType.HADAMARD
+            g.add_edge(g.edge(bb, vv), edgetype=etype)
+            g.remove_edge(g.edge(w,bb))
+
         for n in g.neighbors(v): consumed_vertices.add(n)
         for n in g.neighbors(w): consumed_vertices.add(n)
-        assert bound is not None
-        m.append(((v,w),([],[bound])))
+        # assert bound is not None
+        m.append(((v,w),([],[]))) # m.append(((v,w),([],[bound])))
         i += 1
         for n in g.neighbors(v): candidates.discard(n)
         for n in g.neighbors(w): candidates.discard(n)
 
-    g.add_edges(edge_list, EdgeType.HADAMARD)
+    # g.add_edges(edge_list, EdgeType.HADAMARD)
     return m
 
 def pivot(g: BaseGraph[VT,ET], matches: List[MatchPivotType[VT]]) -> RewriteOutputType[VT,ET]:
@@ -631,11 +645,13 @@ def pivot(g: BaseGraph[VT,ET], matches: List[MatchPivotType[VT]]) -> RewriteOutp
 
 
     for m in matches:
+        g.update_phase_index(m[0][0],m[0][1]) ## why?
+
         # compute:
-        #  n[0] <- non-boundary neighbors of m[0] only
-        #  n[1] <- non-boundary neighbors of m[1] only
-        #  n[2] <- non-boundary neighbors of m[0] and m[1]
-        g.update_phase_index(m[0][0],m[0][1])
+        #  n[0] <- non-boundary neighbors of m[0][0] only
+        #  n[1] <- non-boundary neighbors of m[0][1] only
+        #  n[2] <- non-boundary neighbors of m[0][0] and m[0][1]
+
         n = [set(g.neighbors(m[0][0])), set(g.neighbors(m[0][1]))]
         for i in range(2):
             n[i].remove(m[0][1-i])
@@ -643,6 +659,7 @@ def pivot(g: BaseGraph[VT,ET], matches: List[MatchPivotType[VT]]) -> RewriteOutp
         n.append(n[0] & n[1])
         n[0] = n[0] - n[2]
         n[1] = n[1] - n[2]
+
         es = ([(s,t) for s in n[0] for t in n[1]] +
               [(s,t) for s in n[1] for t in n[2]] +
               [(s,t) for s in n[0] for t in n[2]])
@@ -661,7 +678,7 @@ def pivot(g: BaseGraph[VT,ET], matches: List[MatchPivotType[VT]]) -> RewriteOutp
         else: g.scalar.add_power(-(k0+k2))
 
         for i in 0, 1:
-            # if m[i] has a phase, it will get copied on to the neighbors of m[1-i]:
+            # if m[0][i] has a phase, it will get copied on to the non-boundary neighbors of m[0][1-i]
             a = g.phase(m[0][i])
             if a:
                 for v in n[1-i]:
@@ -677,13 +694,15 @@ def pivot(g: BaseGraph[VT,ET], matches: List[MatchPivotType[VT]]) -> RewriteOutp
             else:
                 # if there is a boundary, toggle whether it is an h-edge or a normal edge
                 # and point it at the other vertex
-                e = (m[0][i], m[1][i][0])
-                new_e = (m[0][1-i], m[1][i][0])
-                ne,nhe = etab.get(new_e) or [0,0]
-                if g.edge_type(g.edge(e[0],e[1])) == EdgeType.SIMPLE: nhe += 1
-                elif g.edge_type(g.edge(e[0],e[1])) == EdgeType.HADAMARD: ne += 1
-                etab[new_e] = [ne,nhe]
-                rem_edges.append(g.edge(e[0], e[1]))
+                boundaries = m[1][i] 
+                for bb in range(len(boundaries)):
+                    e = (m[0][i], m[1][i][bb])
+                    new_e = (m[0][1-i], m[1][i][bb])
+                    ne,nhe = etab.get(new_e) or [0,0]
+                    if g.edge_type(g.edge(e[0],e[1])) == EdgeType.SIMPLE: nhe += 1
+                    elif g.edge_type(g.edge(e[0],e[1])) == EdgeType.HADAMARD: ne += 1
+                    etab[new_e] = [ne,nhe]
+                    rem_edges.append(g.edge(e[0], e[1]))
 
 
         for e in es:
@@ -704,7 +723,7 @@ def match_lcomp_parallel(
         num:int=-1,
         check_edge_types:bool=True
         ) -> List[MatchLcompType[VT]]:
-    """Finds noninteracting matchings of the local complementation rule.
+    """Finds noninteracting matchings of the local complementation rule.co
 
     :param g: An instance of a ZX-graph.
     :param num: Maximal amount of matchings to find. If -1 (the default)
